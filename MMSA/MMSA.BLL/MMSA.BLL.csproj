@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IronPython" Version="3.4.0" />
+    <PackageReference Include="pythonnet" Version="3.1.0-preview2023-04-03" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MMSA.DAL\MMSA.DAL.csproj" />
+  </ItemGroup>
+
+</Project>
