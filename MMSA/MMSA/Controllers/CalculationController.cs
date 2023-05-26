@@ -16,7 +16,7 @@ namespace MMSA.Controllers
         }
 
         [HttpGet("GetVm")]
-        public async Task<IActionResult> GetVm([FromQuery] CalculationInputDto calculationInput)
+        public IActionResult GetVm([FromQuery] CalculationInputDto calculationInput)
         {
             var vm = _calculationService.GetVm(calculationInput.InputFunction, calculationInput.CalculationType);
 
@@ -26,11 +26,9 @@ namespace MMSA.Controllers
 
             var un = _calculationService.GetUn(vm, cm, mu[0]);
 
-            var plot = _calculationService.GetPlot(un, "2");
+            var plot = _calculationService.GetPlot(un, calculationInput.CalculationType);
 
-            var f = (double[][])mu[1];
-            var result = new CalculationResultDto { Plot = (string)plot, MU = f };
-            return Ok(result);
+            return Ok(new CalculationResultDto { MU = (double[][])mu[1], PlotXi = (double[])plot[0], PlotFXi = (double[][][])plot[1]});
         }
     }
 }

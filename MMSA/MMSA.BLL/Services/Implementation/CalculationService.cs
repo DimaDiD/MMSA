@@ -1,85 +1,35 @@
-﻿using MMSA.BLL.Services.Interfaces;
+﻿using Microsoft.Extensions.Logging;
+using MMSA.BLL.Services.Interfaces;
 using Python.Runtime;
 
 namespace MMSA.BLL.Services.Implementation
 {
     public class CalculationService : ICalculationService
     {
-        public CalculationService()
+        private readonly ILogger _logger;
+        private IntPtr _threadState;
+
+
+        public CalculationService(ILogger<CalculationService> logger)
         {
-            Initialize();
+            Initialize();            
+            _logger = logger;
         }
 
         private static void Initialize()
         {
             string pythonDLL = @"C:\Users\Dmytro\AppData\Local\Programs\Python\Python311\python311.dll";
             Environment.SetEnvironmentVariable("PYTHONNET_PYDLL", pythonDLL);
-            PythonEngine.Initialize();
+            PythonEngine.Initialize();            
         }
-
-        //        public List<string> GetVm(object funV0, object GreenFunction)
-        //        {           
-
-        //            dynamic vm;
-
-        //            using (Py.GIL())
-        //            {
-        //                using (var scope = Py.CreateScope())
-        //                {
-        //                    scope.Import("numpy");
-        //                    scope.Import("sympy");
-        //                    scope.Import("re");
-        //                    scope.Set("funV0", funV0.ToPython());
-        //                    scope.Set("GreenFunction", GreenFunction.ToPython());
-        //                    scope.Exec(@"
-        //operatorA = ['(((2-t)*x)/2)', '((t*(2-x))/2)']
-        //if GreenFunction == '2':
-        //    operatorA=['(2-t)','(2-x)']
-
-        //v0_x = ''
-        //for i in range(len(funV0)):
-        //    if funV0[i] == '^':
-        //        v0_x += '**'
-        //    else:
-        //        v0_x += funV0[i]
-
-        //v0_t = re.sub('x', 't', v0_x)
-
-        //x, t = sympy.symbols('x t');
-
-        //counter = 0
-        //vx_x = [v0_x]
-        //vx_t = [v0_t]
-        //while counter != 6:
-        //    vx_part1 = sympy.integrate('(' + operatorA[1] + ')*(' + vx_t[counter] + ')', (t, 0.0, x))
-        //    vx_part2 = sympy.integrate('(' + operatorA[0] + ')*(' + vx_t[counter] + ')', (t, x, 1.0))
-
-        //    full_vx = str(sympy.expand(str(vx_part1) + ""+"" + str(vx_part2)))
-        //    vx_x.append(full_vx)
-        //    vx_t.append(re.sub('x', 't', full_vx))
-
-        //    counter = counter + 1    
-        //                    ");
-        //                    vm = scope.Get("vx_x");
-        //                }
-        //            }
-
-        //            var mylist = ((string[])vm).ToList<string>();
-
-        //            foreach (var item in vm)
-        //            {
-        //                Console.WriteLine(item.ToString());
-        //            }
-
-        //            return new List<string>();
-        //        }
 
 
         public object GetVm(object funV0, object GreenFunction)
         {
-
+            _threadState = PythonEngine.BeginAllowThreads();
+            _logger.LogInformation("*** Start GetVm method... ***");
             var vm = new object();
-
+            
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -118,18 +68,23 @@ while counter != 6:
 
     counter = counter + 1    
                     ");
+
+                    _logger.LogInformation("*** Python calculation finished... ***");
                     vm = scope.Get<object>("vx_x");
                 }
             }
-
+            PythonEngine.EndAllowThreads(_threadState);
+            _logger.LogInformation("*** Return vm... ***");
             return vm;
         }
 
         public object GetCm(object vm)
         {
-
+            _threadState = PythonEngine.BeginAllowThreads();
+            _logger.LogInformation("*** Start GetCm method... ***");
             var cm = new object();
 
+            //Initialize();
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -175,18 +130,24 @@ for i in range(0, len(scalar_matrix)):
 
         c_m.append(numpy.linalg.inv(new_scalar_matrix).dot(new_result_matrix))   
                     ");
+
+                    _logger.LogInformation("*** Python calculation finished... ***");
                     cm = scope.Get<object>("c_m");
                 }
             }
-
+            PythonEngine.EndAllowThreads(_threadState);
+            _logger.LogInformation("*** Return cm... ***");
             return cm;
         }
 
 
         public object[] GetMu(object cm)
         {
+            _threadState = PythonEngine.BeginAllowThreads();
+            _logger.LogInformation("*** Start GetMu method... ***");
             var mu = new object[3];
 
+            //Initialize();
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -212,6 +173,8 @@ for j in result:
             internalCheck = 'True'
             break
                     ");
+
+                    _logger.LogInformation("*** Python calculation finished... ***");
                     mu[0] = scope.Get<object>("result");
                     mu[1] = scope.Get<object>("resultForTable");
                     mu[2] = scope.Get<object>("check");
@@ -222,16 +185,19 @@ for j in result:
             {
                 PythonEngine.Shutdown();
             }
-
-
+            PythonEngine.EndAllowThreads(_threadState);
+            _logger.LogInformation("*** Return mu... ***");
             return mu;
         }
 
 
         public object GetUn(object vm, object cm, object mu)
         {
-            var un = new object();
+            _threadState = PythonEngine.BeginAllowThreads();
+            _logger.LogInformation("*** Start GeUn method... ***");
+            dynamic un;
 
+            //Initialize();
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -265,29 +231,34 @@ for i1 in range(0, len(mu) - 1):
     un.append(ui)
 un.reverse()
                     ");
-                    un = scope.Get<object>("un");                                
+
+                    _logger.LogInformation("*** Python calculation finished... ***");
+                    un = scope.Get("un");                                
                 }
             }
 
-            return un;
+            var result = (string[][])un;
+
+            _logger.LogInformation("*** Return un... ***");
+            PythonEngine.EndAllowThreads(_threadState);
+            return result;
         }
 
 
-        public object GetPlot(object un, object GreenFunction)
+        public object[] GetPlot(object un, object GreenFunction)
         {
-            var plot = new object();
+            _threadState = PythonEngine.BeginAllowThreads();
+            _logger.LogInformation("*** Start GetPlot method... ***");
+            var plot = new object[2];
 
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
                 {
                     scope.Import("numpy");
-                    scope.Import("matplotlib");
-                    scope.Import("matplotlib.pyplot");
                     scope.Import("scipy");
                     scope.Import("clr");
                     scope.Import("System");
-                    scope.Import("mpld3");
                     scope.Set("un", un.ToPython());
                     scope.Set("GreenFunction", GreenFunction.ToPython());
                     scope.Exec(@"
@@ -297,29 +268,92 @@ if GreenFunction == '1':
 if GreenFunction == '2':
     end = 3
 
-fig, ax = matplotlib.pyplot.subplots(nrows=end, figsize=(8,24))
-fig.tight_layout()
-
-for uni in range(0, end):
-    xi = numpy.linspace(0, 1, 80)
+xi = numpy.linspace(0, 1, 80)
+allGraphs = []
+for uni in range(0, end):    
+    uniGraphs = []
     for ui in range(0, len(un[uni])):
         def f(x):
             return float(eval(un[uni][ui]))
         
         norma, err = scipy.integrate.quad(f, 0.00, 1.00)
         f_ui = [f(i)/norma for i in xi]
+        
+        uniGraphs.append(f_ui)
+    allGraphs.append(uniGraphs)
 
-        tempLabel = 'U'+str(ui + 1)
-        ax[uni].plot(xi, f_ui, label=tempLabel)
-    ax[uni].legend()
-
-plot = str(mpld3.fig_to_html(fig))
+parsedXi = System.Array[System.Double](xi)
+parsedAllGraphs = System.Array[System.Array[System.Array[System.Double]]](allGraphs)
                     ");
-                    plot = scope.Get<object>("plot");
+
+                    _logger.LogInformation("*** Creating plot finish... ***");
+                    plot[0] = scope.Get<object>("parsedXi");
+                    plot[1] = scope.Get<object>("parsedAllGraphs");
                 }
             }
 
+            _logger.LogInformation("*** PythonEngine shutdown... ***");
+            PythonEngine.EndAllowThreads(_threadState);
+
+            _logger.LogInformation("*** Return plot... ***");
             return plot;
         }
     }
 }
+
+//        public List<string> GetVm(object funV0, object GreenFunction)
+//        {           
+
+//            dynamic vm;
+
+//            using (Py.GIL())
+//            {
+//                using (var scope = Py.CreateScope())
+//                {
+//                    scope.Import("numpy");
+//                    scope.Import("sympy");
+//                    scope.Import("re");
+//                    scope.Set("funV0", funV0.ToPython());
+//                    scope.Set("GreenFunction", GreenFunction.ToPython());
+//                    scope.Exec(@"
+//operatorA = ['(((2-t)*x)/2)', '((t*(2-x))/2)']
+//if GreenFunction == '2':
+//    operatorA=['(2-t)','(2-x)']
+
+//v0_x = ''
+//for i in range(len(funV0)):
+//    if funV0[i] == '^':
+//        v0_x += '**'
+//    else:
+//        v0_x += funV0[i]
+
+//v0_t = re.sub('x', 't', v0_x)
+
+//x, t = sympy.symbols('x t');
+
+//counter = 0
+//vx_x = [v0_x]
+//vx_t = [v0_t]
+//while counter != 6:
+//    vx_part1 = sympy.integrate('(' + operatorA[1] + ')*(' + vx_t[counter] + ')', (t, 0.0, x))
+//    vx_part2 = sympy.integrate('(' + operatorA[0] + ')*(' + vx_t[counter] + ')', (t, x, 1.0))
+
+//    full_vx = str(sympy.expand(str(vx_part1) + ""+"" + str(vx_part2)))
+//    vx_x.append(full_vx)
+//    vx_t.append(re.sub('x', 't', full_vx))
+
+//    counter = counter + 1    
+//                    ");
+//                    vm = scope.Get("vx_x");
+//                }
+//            }
+
+//            var mylist = ((string[])vm).ToList<string>();
+
+//            foreach (var item in vm)
+//            {
+//                Console.WriteLine(item.ToString());
+//            }
+
+//            return new List<string>();
+//        }
