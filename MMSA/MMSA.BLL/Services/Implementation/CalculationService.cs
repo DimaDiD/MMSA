@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using MMSA.BLL.Services.Interfaces;
 using Python.Runtime;
+using static IronPython.Modules._ast;
 
 namespace MMSA.BLL.Services.Implementation
 {
@@ -20,16 +21,16 @@ namespace MMSA.BLL.Services.Implementation
         {
             string pythonDLL = @"C:\Users\Dmytro\AppData\Local\Programs\Python\Python311\python311.dll";
             Environment.SetEnvironmentVariable("PYTHONNET_PYDLL", pythonDLL);
-            PythonEngine.Initialize();            
+            PythonEngine.Initialize();
         }
 
 
-        public object GetVm(object funV0, object GreenFunction)
+        public object GetVm(object funV0, object operatorValues, object operators, object scopes, object leftSide, object rightSide)
         {
             _threadState = PythonEngine.BeginAllowThreads();
             _logger.LogInformation("*** Start GetVm method... ***");
             var vm = new object();
-            
+
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -38,12 +39,12 @@ namespace MMSA.BLL.Services.Implementation
                     scope.Import("sympy");
                     scope.Import("re");
                     scope.Set("funV0", funV0.ToPython());
-                    scope.Set("GreenFunction", GreenFunction.ToPython());
+                    scope.Set("operatorValues", operatorValues.ToPython());
+                    scope.Set("operators", operators.ToPython());
+                    scope.Set("scopes", scopes.ToPython());
+                    scope.Set("leftSide", leftSide.ToPython());
+                    scope.Set("rightSide", rightSide.ToPython());
                     scope.Exec(@"
-operatorA = ['(((2-t)*x)/2)', '((t*(2-x))/2)']
-if GreenFunction == '2':
-    operatorA=['(2-t)','(2-x)']
-
 v0_x = ''
 for i in range(len(funV0)):
     if funV0[i] == '^':
@@ -51,20 +52,28 @@ for i in range(len(funV0)):
     else:
         v0_x += funV0[i]
 
-v0_t = re.sub('x', 't', v0_x)
+v0_x = v0_x.replace(' ','')
 
-x, t = sympy.symbols('x t');
+#v0_t = re.sub('x', 't', v0_x)
+v0_t = re.sub(operatorValues[0], operatorValues[1], v0_x)
+
+#x, t = sympy.symbols('x t')
+x, t = sympy.symbols(f'{operatorValues[0]} {operatorValues[1]}')
+
+if('>=' in scopes[0] or '>' in scopes[0]):
+    operators.reverse()
 
 counter = 0
 vx_x = [v0_x]
 vx_t = [v0_t]
 while counter != 6:
-    vx_part1 = sympy.integrate('(' + operatorA[1] + ')*(' + vx_t[counter] + ')', (t, 0.0, x))
-    vx_part2 = sympy.integrate('(' + operatorA[0] + ')*(' + vx_t[counter] + ')', (t, x, 1.0))
+    vx_part2 = sympy.integrate('(' + operators[0] + ')*(' + vx_t[counter] + ')', (t, x, rightSide))
+    vx_part1 = sympy.integrate('(' + operators[1] + ')*(' + vx_t[counter] + ')', (t, leftSide, x))        
 
-    full_vx = str(sympy.expand(str(vx_part1) + ""+"" + str(vx_part2)))
+    full_vx = str(sympy.expand(str(vx_part1) + '+' + str(vx_part2)))
     vx_x.append(full_vx)
-    vx_t.append(re.sub('x', 't', full_vx))
+    #vx_t.append(re.sub('x', 't', full_vx))
+    vx_t.append(re.sub(operatorValues[0], operatorValues[1], full_vx))
 
     counter = counter + 1    
                     ");
@@ -78,13 +87,12 @@ while counter != 6:
             return vm;
         }
 
-        public object GetCm(object vm)
+        public object GetCm(object vm, object leftSide, object rightSide)
         {
             _threadState = PythonEngine.BeginAllowThreads();
             _logger.LogInformation("*** Start GetCm method... ***");
             var cm = new object();
 
-            //Initialize();
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -93,6 +101,8 @@ while counter != 6:
                     scope.Import("scipy");
                     scope.Import("scipy.integrate");
                     scope.Set("v_m", vm.ToPython());
+                    scope.Set("leftSide", leftSide.ToPython());
+                    scope.Set("rightSide", rightSide.ToPython());
                     scope.Exec(@"
 current_function = ''
 
@@ -104,11 +114,11 @@ result_matrix = numpy.zeros(len(v_m) - 1)
 for i1 in range(1, len(v_m)):
     for i2 in range(1, len(v_m)):
         current_function = '(' + v_m[i2] + ')*(' + v_m[i1] + ')' 
-        result, err = scipy.integrate.quad(f, 0.0, 1.0)
+        result, err = scipy.integrate.quad(f, float(leftSide), float(rightSide))
         scalar_matrix[len(v_m) - 1 - i1][len(v_m) - 1 - i2] = result
 
     current_function = '(' + v_m[0] + ')*(' + v_m[i1] + ')'
-    result, err = scipy.integrate.quad(f, 0.0, 1.0)
+    result, err = scipy.integrate.quad(f, float(leftSide), float(rightSide))
     result_matrix[len(v_m) - 1 - i1] = -result
 
 c_m = []
@@ -181,10 +191,6 @@ for j in result:
                 }
             }
 
-            if ((string)mu[2] == "True")
-            {
-                PythonEngine.Shutdown();
-            }
             PythonEngine.EndAllowThreads(_threadState);
             _logger.LogInformation("*** Return mu... ***");
             return mu;
@@ -245,7 +251,7 @@ un.reverse()
         }
 
 
-        public object[] GetPlot(object un, object GreenFunction)
+        public object[] GetPlot(object un)//, object GreenFunction)
         {
             _threadState = PythonEngine.BeginAllowThreads();
             _logger.LogInformation("*** Start GetPlot method... ***");
@@ -260,13 +266,8 @@ un.reverse()
                     scope.Import("clr");
                     scope.Import("System");
                     scope.Set("un", un.ToPython());
-                    scope.Set("GreenFunction", GreenFunction.ToPython());
                     scope.Exec(@"
-end = 0
-if GreenFunction == '1':
-    end = len(un)
-if GreenFunction == '2':
-    end = 3
+end = len(un)
 
 xi = numpy.linspace(0, 1, 80)
 allGraphs = []
@@ -297,6 +298,205 @@ parsedAllGraphs = System.Array[System.Array[System.Array[System.Double]]](allGra
 
             _logger.LogInformation("*** Return plot... ***");
             return plot;
+        }
+
+
+        public object GetMainResult(object cm, object mu)
+        {
+            _threadState = PythonEngine.BeginAllowThreads();
+            _logger.LogInformation("*** Start GetMu method... ***");
+            var result = new object();
+
+            using (Py.GIL())
+            {
+                using (var scope = Py.CreateScope())
+                {
+                    scope.Import("numpy");
+                    scope.Import("clr");
+                    scope.Import("sympy");
+                    scope.Import("math");
+                    scope.Import("scipy.integrate");
+                    scope.Import("re");
+                    scope.Import("System");
+                    scope.Set("cm", cm.ToPython());
+                    scope.Set("mu", mu.ToPython());
+                    scope.Exec(@"
+def tangent(function, a, b, e, check):
+    add_func = ''
+    for i in range(len(function)):  # формування функції для обчислень
+        if function[i] == '^':
+            add_func += '**'
+        else:
+            add_func += function[i]
+    function = add_func
+
+    def derivative(func):  # похідна функції
+        x = Symbol('x')
+        y = eval(func)
+        res = str(y.diff(x))
+        return res
+
+    def f(x):
+        return float(eval(function))  # значення функції в точці
+
+    def fn(x):
+        return float(eval(derivative(function)))  # перша похідна
+
+    def fnn(x):
+        return float(eval(derivative(derivative(function))))  # третя похідна
+
+    def direct(n):  # напрямок з якого відбуватиметься обрахунок
+        try:
+            if f(n) > 0 and fnn(n) > 0:
+                return True
+            elif f(n) < 0 and fnn(n) < 0:
+                return True
+            return False
+        except:
+            return False
+
+    if direct(a):  # визначення напрямку
+        xs = a
+        silence = 1
+        step = 0.01
+        border = b
+    else:
+        xs = b
+        silence = -1
+        step = -0.01
+        border = a
+
+    # мінімальне та максимальне значення аохідної на проміжку [a, b]
+    min_val = math.fabs(fn(xs))
+    max_val = math.fabs(fn(xs))
+    i = xs
+    while i*silence <= border*silence:
+        if math.fabs(fn(i)) < min_val:
+            min_val = math.fabs(fn(i))
+        elif math.fabs(fn(i)) > max_val:
+            max_val = math.fabs(fn(i))
+        i += step
+
+    xs = (a+b)/2
+    temp = b
+
+    while math.fabs(xs - temp) >= math.sqrt((2*min_val*e)/max_val):  # перевірка критерію
+        temp = xs
+        xs = xs - (f(xs)/fn(xs))  # формула для обчислення Xi+1
+    
+    return xs
+
+
+def chord(function, a, b, e, check):
+    add_func = ''
+    for i in range(len(function)):  # формування функції для обчислень
+        if function[i] == '^':
+            add_func += '**'
+        else:
+            add_func += function[i]
+    function = add_func
+
+    def derivative(func):  # похідна функції
+        x = Symbol('x')
+        y = eval(func)
+        res = str(y.diff(x))
+        return res
+
+    def f(x):
+        return float(eval(function))  # значення функції в точці
+
+    def fn(x):
+        return float(eval(derivative(function)))  # перша похідна
+
+    sm = 10  # для формування першої хорди
+    temp = a
+
+    fnx_max = math.fabs(fn(a))
+    fnx_min = math.fabs(fn(a))
+    i = a
+    while b >= i:  # пошук мінімального та максимального значення похідної на проміжку [a, b]
+        sm_x = math.fabs(fn(i))
+        if fnx_max < sm_x:
+            fnx_max = sm_x
+        if fnx_min > sm_x:
+            fnx_min = sm_x
+        i += 0.01
+
+    a = (a + b) / 2  # початкова віддаль
+
+    previous = 0
+    while sm >= (e*(fnx_max-fnx_min))/fnx_max:  # критерій пошуку розвя'зку
+        if sm == 10:  # формування першої хорди
+            sm = math.fabs(a - temp)  # |Хі+1-Хі|
+
+        # формування графіків та пошук розв'язку
+        temp = a
+        a = a - (f(a) * (b - a)) / (f(b) - f(a))  # формула для знаходження Хі+1
+        if(a == previous):
+            break
+        previous = a
+
+        sm = math.fabs(a - temp)  # |Хі+1-Хі|
+    
+    return a
+
+
+result = []  
+for i in cm:
+    if(len(i) == 1):
+        continue
+
+    polinom = ''
+    for j in range(0, len(i)):
+        if(j != len(i) - 1):
+            polinom = polinom + str(i[j])+ '*x**'+ str(j)+'+'
+        else:
+            polinom = polinom + str(i[j])+ '*x**'+ str(j)
+        
+    fi_x = ''
+    #if(methodForExactCalculation == ""simpleIteration""):
+    if (True):
+        for j in range(0, len(i)-1):
+            last_pow = len(i) - 1
+            last_koef = i[last_pow]
+            sign = ''
+            if(last_koef < 0):
+                sign = '-'
+            else:
+                sign = ''
+
+            if(j != len(i) - 2):
+                fi_x = fi_x + '('+str(i[j])+ '*x**'+ str(j)+f')/({sign}1*{last_koef}*x**{last_pow-1})'+'+'
+            elif(j != len(i) - 3):
+                fi_x = fi_x + '('+str(i[j])+ '*x**'+ str(j)+f')/({sign}1*{last_koef}*x**{last_pow-1})'
+            else:
+                continue
+
+    if((numpy.iscomplex(mu[cm.index(i)])).any()):        
+        continue            
+
+    tangentResult = []
+    for item in mu[cm.index(i)]:     
+        chordValue = chord(polinom, item-0.001, item+0.001, 0.0001, False)        
+        tangentValue = tangent(polinom, item-0.001, item+0.001, 0.0001, False)
+        tangentResult.append(tangentValue)
+
+    result.append(tangentResult)
+#result = System.Array[System.Array[System.Double]](result)
+                    ");
+
+                    _logger.LogInformation("*** Python calculation finished... ***");
+                    result = scope.Get<object>("result");
+                }
+            }
+
+            //if ((string)mu[2] == "True")
+            //{
+            //    PythonEngine.Shutdown();
+            //}
+            PythonEngine.EndAllowThreads(_threadState);
+            _logger.LogInformation("*** Return mu... ***");
+            return result;
         }
     }
 }
