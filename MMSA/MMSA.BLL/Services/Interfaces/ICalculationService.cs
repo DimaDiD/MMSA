@@ -6,9 +6,7 @@
         public object GetCm(object vm, object leftSide, object rightSide);
         public object[] GetMu(object cm);
         public object GetUn(object vm, object cm, object mu);
-        public object[] GetPlot(object un);
-
+        public object[] GetPlot(object un, object leftSide, object rightSide);
         public object GetMainResult(object cm, object mu);
-        //public List<string> GetVm(object funV0, object GreenFunction);
     }
 }

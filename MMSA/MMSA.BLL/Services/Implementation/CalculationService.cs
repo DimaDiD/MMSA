@@ -157,7 +157,6 @@ for i in range(0, len(scalar_matrix)):
             _logger.LogInformation("*** Start GetMu method... ***");
             var mu = new object[3];
 
-            //Initialize();
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -167,27 +166,24 @@ for i in range(0, len(scalar_matrix)):
                     scope.Import("System");
                     scope.Set("cm", cm.ToPython());
                     scope.Exec(@"
+newCm = []
 result = []
-check = 'False'
-for i in cm:
-    result.append(numpy.polynomial.polynomial.Polynomial(i).roots())
+for i in range(0, len(cm)):
+    roots = numpy.polynomial.polynomial.Polynomial(cm[i]).roots()
+    if True in numpy.iscomplex(roots):
+        continue
+    else:
+        result.append(roots)
+        newCm.append(cm[i])      
+
 resultForTable = [[float(j) for j in i] for i in result]
 resultForTable = System.Array[System.Array[System.Double]](resultForTable)
-internalCheck = 'False'
-for j in result:
-    if internalCheck == 'True':
-        break
-    else:
-        if True in numpy.iscomplex(j):
-            check = 'True'
-            internalCheck = 'True'
-            break
                     ");
 
                     _logger.LogInformation("*** Python calculation finished... ***");
                     mu[0] = scope.Get<object>("result");
                     mu[1] = scope.Get<object>("resultForTable");
-                    mu[2] = scope.Get<object>("check");
+                    mu[2] = scope.Get<object>("newCm");
                 }
             }
 
@@ -203,7 +199,6 @@ for j in result:
             _logger.LogInformation("*** Start GeUn method... ***");
             dynamic un;
 
-            //Initialize();
             using (Py.GIL())
             {
                 using (var scope = Py.CreateScope())
@@ -251,7 +246,7 @@ un.reverse()
         }
 
 
-        public object[] GetPlot(object un)//, object GreenFunction)
+        public object[] GetPlot(object un, object leftSide, object rightSide)
         {
             _threadState = PythonEngine.BeginAllowThreads();
             _logger.LogInformation("*** Start GetPlot method... ***");
@@ -266,6 +261,8 @@ un.reverse()
                     scope.Import("clr");
                     scope.Import("System");
                     scope.Set("un", un.ToPython());
+                    scope.Set("lefSide", leftSide.ToPython());
+                    scope.Set("rightSide", rightSide.ToPython());
                     scope.Exec(@"
 end = len(un)
 
@@ -277,9 +274,8 @@ for uni in range(0, end):
         def f(x):
             return float(eval(un[uni][ui]))
         
-        norma, err = scipy.integrate.quad(f, 0.00, 1.00)
-        f_ui = [f(i)/norma for i in xi]
-        
+        norma, err = scipy.integrate.quad(f, float(lefSide), float(rightSide))
+        f_ui = [f(i)/norma for i in xi]        
         uniGraphs.append(f_ui)
     allGraphs.append(uniGraphs)
 
@@ -331,7 +327,7 @@ def tangent(function, a, b, e, check):
     function = add_func
 
     def derivative(func):  # похідна функції
-        x = Symbol('x')
+        x = sympy.Symbol('x')
         y = eval(func)
         res = str(y.diff(x))
         return res
@@ -387,102 +383,29 @@ def tangent(function, a, b, e, check):
     return xs
 
 
-def chord(function, a, b, e, check):
-    add_func = ''
-    for i in range(len(function)):  # формування функції для обчислень
-        if function[i] == '^':
-            add_func += '**'
-        else:
-            add_func += function[i]
-    function = add_func
-
-    def derivative(func):  # похідна функції
-        x = Symbol('x')
-        y = eval(func)
-        res = str(y.diff(x))
-        return res
-
-    def f(x):
-        return float(eval(function))  # значення функції в точці
-
-    def fn(x):
-        return float(eval(derivative(function)))  # перша похідна
-
-    sm = 10  # для формування першої хорди
-    temp = a
-
-    fnx_max = math.fabs(fn(a))
-    fnx_min = math.fabs(fn(a))
-    i = a
-    while b >= i:  # пошук мінімального та максимального значення похідної на проміжку [a, b]
-        sm_x = math.fabs(fn(i))
-        if fnx_max < sm_x:
-            fnx_max = sm_x
-        if fnx_min > sm_x:
-            fnx_min = sm_x
-        i += 0.01
-
-    a = (a + b) / 2  # початкова віддаль
-
-    previous = 0
-    while sm >= (e*(fnx_max-fnx_min))/fnx_max:  # критерій пошуку розвя'зку
-        if sm == 10:  # формування першої хорди
-            sm = math.fabs(a - temp)  # |Хі+1-Хі|
-
-        # формування графіків та пошук розв'язку
-        temp = a
-        a = a - (f(a) * (b - a)) / (f(b) - f(a))  # формула для знаходження Хі+1
-        if(a == previous):
-            break
-        previous = a
-
-        sm = math.fabs(a - temp)  # |Хі+1-Хі|
-    
-    return a
-
-
 result = []  
-for i in cm:
-    if(len(i) == 1):
-        continue
+for i in range(0, len(cm)):
+    if(len(cm[i]) == 1):
+        continue 
+
+    if(numpy.iscomplex(mu[i]).any()):        
+        continue 
 
     polinom = ''
-    for j in range(0, len(i)):
-        if(j != len(i) - 1):
-            polinom = polinom + str(i[j])+ '*x**'+ str(j)+'+'
+    for j in range(0, len(cm[i])):
+        if(j != len(cm[i]) - 1):
+            polinom = polinom + str(cm[i][j])+ '*x**'+ str(j)+'+'
         else:
-            polinom = polinom + str(i[j])+ '*x**'+ str(j)
-        
-    fi_x = ''
-    #if(methodForExactCalculation == ""simpleIteration""):
-    if (True):
-        for j in range(0, len(i)-1):
-            last_pow = len(i) - 1
-            last_koef = i[last_pow]
-            sign = ''
-            if(last_koef < 0):
-                sign = '-'
-            else:
-                sign = ''
+            polinom = polinom + str(cm[i][j])+ '*x**'+ str(j)         
 
-            if(j != len(i) - 2):
-                fi_x = fi_x + '('+str(i[j])+ '*x**'+ str(j)+f')/({sign}1*{last_koef}*x**{last_pow-1})'+'+'
-            elif(j != len(i) - 3):
-                fi_x = fi_x + '('+str(i[j])+ '*x**'+ str(j)+f')/({sign}1*{last_koef}*x**{last_pow-1})'
-            else:
-                continue
+    concreteRoots = []
+    for item in mu[i]: 
+        concreteRoots.append(tangent(polinom, item-0.001, item+0.001, 0.0001, False))
 
-    if((numpy.iscomplex(mu[cm.index(i)])).any()):        
-        continue            
+    result.append(concreteRoots)
+result.append([])
 
-    tangentResult = []
-    for item in mu[cm.index(i)]:     
-        chordValue = chord(polinom, item-0.001, item+0.001, 0.0001, False)        
-        tangentValue = tangent(polinom, item-0.001, item+0.001, 0.0001, False)
-        tangentResult.append(tangentValue)
-
-    result.append(tangentResult)
-#result = System.Array[System.Array[System.Double]](result)
+result = System.Array[System.Array[System.Double]](result)
                     ");
 
                     _logger.LogInformation("*** Python calculation finished... ***");
@@ -490,70 +413,9 @@ for i in cm:
                 }
             }
 
-            //if ((string)mu[2] == "True")
-            //{
-            //    PythonEngine.Shutdown();
-            //}
             PythonEngine.EndAllowThreads(_threadState);
             _logger.LogInformation("*** Return mu... ***");
             return result;
         }
     }
 }
-
-//        public List<string> GetVm(object funV0, object GreenFunction)
-//        {           
-
-//            dynamic vm;
-
-//            using (Py.GIL())
-//            {
-//                using (var scope = Py.CreateScope())
-//                {
-//                    scope.Import("numpy");
-//                    scope.Import("sympy");
-//                    scope.Import("re");
-//                    scope.Set("funV0", funV0.ToPython());
-//                    scope.Set("GreenFunction", GreenFunction.ToPython());
-//                    scope.Exec(@"
-//operatorA = ['(((2-t)*x)/2)', '((t*(2-x))/2)']
-//if GreenFunction == '2':
-//    operatorA=['(2-t)','(2-x)']
-
-//v0_x = ''
-//for i in range(len(funV0)):
-//    if funV0[i] == '^':
-//        v0_x += '**'
-//    else:
-//        v0_x += funV0[i]
-
-//v0_t = re.sub('x', 't', v0_x)
-
-//x, t = sympy.symbols('x t');
-
-//counter = 0
-//vx_x = [v0_x]
-//vx_t = [v0_t]
-//while counter != 6:
-//    vx_part1 = sympy.integrate('(' + operatorA[1] + ')*(' + vx_t[counter] + ')', (t, 0.0, x))
-//    vx_part2 = sympy.integrate('(' + operatorA[0] + ')*(' + vx_t[counter] + ')', (t, x, 1.0))
-
-//    full_vx = str(sympy.expand(str(vx_part1) + ""+"" + str(vx_part2)))
-//    vx_x.append(full_vx)
-//    vx_t.append(re.sub('x', 't', full_vx))
-
-//    counter = counter + 1    
-//                    ");
-//                    vm = scope.Get("vx_x");
-//                }
-//            }
-
-//            var mylist = ((string[])vm).ToList<string>();
-
-//            foreach (var item in vm)
-//            {
-//                Console.WriteLine(item.ToString());
-//            }
-
-//            return new List<string>();
-//        }
