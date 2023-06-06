@@ -4,6 +4,8 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Mvc;
 using MMSA.BLL.Services.Interfaces;
 using MMSA.DAL.Dtos;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Globalization;
 
 namespace MMSA.Controllers
 {
@@ -18,7 +20,7 @@ namespace MMSA.Controllers
             _calculationService = calculationService;
         }
 
-        [HttpGet("GetVm")]
+        [HttpGet("MakeCalculation")]
         public IActionResult GetVm([FromQuery] CalculationInputDto calculationInput)
         {
             var vm = _calculationService.GetVm(calculationInput.InputFunction, calculationInput.OperatorValues, calculationInput.Operators, calculationInput.Scopes, calculationInput.LeftSide, calculationInput.RightSide);
@@ -37,8 +39,20 @@ namespace MMSA.Controllers
         }
 
         [HttpGet("GetFile")]
-        public IActionResult GenerateExcelFile(double[][] data)
-        {           
+        public IActionResult GenerateExcelFile([FromQuery] TableData tableResults)
+        {
+            var data = new List<List<double>>();
+            foreach (var item in tableResults.CalculationResults)
+            {
+                var lineData = item.Split(",");
+                var rowList = new List<double>();
+
+                foreach (var item2 in lineData)
+                    rowList.Add(Double.Parse(item2, NumberStyles.Float, CultureInfo.InvariantCulture));
+                
+                data.Add(rowList);
+            }
+
             byte[] excelBytes;
             using (var memoryStream = new MemoryStream())
             {
@@ -52,7 +66,6 @@ namespace MMSA.Controllers
 
                     var sheets = spreadsheetDocument.WorkbookPart.Workbook.AppendChild(new Sheets());
 
-                    // Add a new worksheet
                     var sheet = new Sheet
                     {
                         Id = spreadsheetDocument.WorkbookPart.GetIdOfPart(worksheetPart),
@@ -63,14 +76,13 @@ namespace MMSA.Controllers
 
                     var sheetData = worksheetPart.Worksheet.GetFirstChild<SheetData>();
 
-                    // Populate the cells with data
-                    for (var row = 0; row < data.Length; row++)
+                    for (var row = 0; row < data.Count; row++)
                     {
                         var rowData = data[row];
 
                         var rowElement = new Row();
 
-                        for (var col = 0; col < rowData.Length; col++)
+                        for (var col = 0; col < rowData.Count; col++)
                         {
                             //var cellValue = ;
                             var cell = new Cell
