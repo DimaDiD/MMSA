@@ -37,15 +37,8 @@ namespace MMSA.Controllers
         }
 
         [HttpGet("GetFile")]
-        public IActionResult GenerateExcelFile()
-        {
-            var data = new double[][]
-{
-    new double[] { 12.1, 3.2 },
-    new double[] { 4, 6 },
-    new double[] { 7, 8, 9 }
-};
-
+        public IActionResult GenerateExcelFile(double[][] data)
+        {           
             byte[] excelBytes;
             using (var memoryStream = new MemoryStream())
             {
@@ -98,7 +91,6 @@ namespace MMSA.Controllers
 
             var base64String = Convert.ToBase64String(excelBytes);
             return Ok(base64String);
-            //return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "data.xlsx");
         }
     }
 }
