@@ -26,19 +26,6 @@ namespace MMSA.Controllers
                 return NotFound();
             }
             return Ok(product);
-            //var vm = _calculationService.GetVm(calculationInput.InputFunction, calculationInput.OperatorValues, calculationInput.Operators, calculationInput.Scopes, calculationInput.LeftSide, calculationInput.RightSide);
-
-            //var cm = _calculationService.GetCm(vm, calculationInput.LeftSide, calculationInput.RightSide);
-
-            //var muNewCm = _calculationService.GetMu(cm);
-
-            //var concreteRoots = _calculationService.GetMainResult(muNewCm[2], muNewCm[0]);
-
-            //var un = _calculationService.GetUn(vm, cm, concreteRoots);
-
-            //var plot = _calculationService.GetPlot(un, calculationInput.LeftSide, calculationInput.RightSide);
-
-            //return Ok(new CalculationResultDto { MU = (double[][])concreteRoots, PlotXi = (double[])plot[0], PlotFXi = (double[][][])plot[1] });
         }
 
         [HttpGet("GetFile")]
