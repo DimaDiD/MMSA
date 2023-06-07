@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using MMSA.BLL.Services.Interfaces;
+using MMSA.DAL.Dtos;
 using Python.Runtime;
-using static IronPython.Modules._ast;
 
 namespace MMSA.BLL.Services.Implementation
 {
@@ -24,6 +24,31 @@ namespace MMSA.BLL.Services.Implementation
             PythonEngine.Initialize();
         }
 
+
+        public CalculationResultDto MakeCalculation(CalculationInputDto calculationInput)
+        {
+            try
+            {
+                var vm = GetVm(calculationInput.InputFunction, calculationInput.OperatorValues, calculationInput.Operators, calculationInput.Scopes, calculationInput.LeftSide, calculationInput.RightSide);
+
+                var cm = GetCm(vm, calculationInput.LeftSide, calculationInput.RightSide);
+
+                var muNewCm = GetMu(cm);
+
+                var concreteRoots = GetMainResult(muNewCm[2], muNewCm[0]);
+
+                var un = GetUn(vm, cm, concreteRoots);
+
+                var plot = GetPlot(un, calculationInput.LeftSide, calculationInput.RightSide);
+
+                return new CalculationResultDto { MU = (double[][])concreteRoots, PlotXi = (double[])plot[0], PlotFXi = (double[][][])plot[1] };
+            }
+            catch (Exception exception)
+            {
+                _logger.LogInformation($"Something gone wrong...: {exception.Message}");
+                return null;
+            }
+        }
 
         public object GetVm(object funV0, object operatorValues, object operators, object scopes, object leftSide, object rightSide)
         {
@@ -63,26 +88,16 @@ x, t = sympy.symbols(f'{operatorValues[0]} {operatorValues[1]}')
 if('>=' in scopes[0] or '>' in scopes[0]):
     operators.reverse()
 
-print(operatorValues[0], operatorValues[1])
-print(operators[0], operators[1])
-print(scopes[0], scopes[1])
-print(leftSide)
-print(rightSide)
-print(v0_t, v0_x)
-
 counter = 0
 vx_x = [v0_x]
 vx_t = [v0_t]
-while counter != 3:
+while counter != 4:
     vx_part2 = sympy.integrate('((' + operators[0] + ')*(' + vx_t[counter] + '))', (t, x, rightSide))
     vx_part1 = sympy.integrate('((' + operators[1] + ')*(' + vx_t[counter] + '))', (t, leftSide, x))        
 
-    
-    print(counter, vx_part1)
-    print('________________________________________')
+
     full_vx = str(sympy.expand(str(vx_part1) + '+' + str(vx_part2)))
     vx_x.append(full_vx)
-    #vx_t.append(re.sub('x', 't', full_vx))
     vx_t.append(re.sub(operatorValues[0], operatorValues[1], full_vx))
 
     counter = counter + 1    
@@ -135,16 +150,15 @@ result_matrix = numpy.zeros(len(v_m) - 1)
 for i1 in range(1, len(v_m)):
     for i2 in range(1, len(v_m)):
         current_function = '((' + v_m[i2] + ')*(' + v_m[i1] + '))' 
-        #result = sympy.integrate(sympy.expand(current_function), (x, float(leftSide), float(rightSide)))
+
         result, err = scipy.integrate.quad(f, float(leftSide), float(rightSide))
         scalar_matrix[len(v_m) - 1 - i1][len(v_m) - 1 - i2] = result
 
     current_function = '((' + v_m[0] + ')*(' + v_m[i1] + '))'
-    #result = sympy.integrate(sympy.expand(current_function), (x, leftSide, rightSide))
+
     result, err = scipy.integrate.quad(f, float(leftSide), float(rightSide))
     result_matrix[len(v_m) - 1 - i1] = -result
-print(scalar_matrix)
-print(result_matrix)
+
 c_m = []
 for i in range(0, len(scalar_matrix)):
     if i == len(scalar_matrix) - 1:
@@ -331,7 +345,6 @@ for uni in range(0, end):
 
         norma, err = scipy.integrate.quad(norma_f, float(leftSide), float(rightSide)) 
         
-        #print(f'Norma {uni}: ', norma)
         f_ui = [f(i)/math.sqrt(norma) for i in xi]        
         uniGraphs.append(f_ui)
     allGraphs.append(uniGraphs)
@@ -385,27 +398,27 @@ parsedAllGraphs = System.Array[System.Array[System.Array[System.Double]]](allGra
                         scope.Exec(@"
 def tangent(function, a, b, e, check):
     add_func = ''
-    for i in range(len(function)):  # формування функції для обчислень
+    for i in range(len(function)):
         if function[i] == '^':
             add_func += '**'
         else:
             add_func += function[i]
     function = add_func
 
-    def derivative(func):  # похідна функції
+    def derivative(func): 
         x = sympy.Symbol('x')
         y = eval(func, {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x})
         res = str(y.diff(x))
         return res
 
     def f(x):
-        return float(eval(function))  # значення функції в точці
+        return float(eval(function))
 
     def fn(x):
-        return float(eval(derivative(function)))  # перша похідна
+        return float(eval(derivative(function)))
 
     def fnn(x):
-        return float(eval(derivative(derivative(function))))  # третя похідна
+        return float(eval(derivative(derivative(function))))
 
     def direct(n):  # напрямок з якого відбуватиметься обрахунок
         try:
@@ -417,7 +430,7 @@ def tangent(function, a, b, e, check):
         except:
             return False
 
-    if direct(a):  # визначення напрямку
+    if direct(a):
         xs = a
         silence = 1
         step = 0.01
@@ -428,7 +441,6 @@ def tangent(function, a, b, e, check):
         step = -0.01
         border = a
 
-    # мінімальне та максимальне значення аохідної на проміжку [a, b]
     min_val = math.fabs(fn(xs))
     max_val = math.fabs(fn(xs))
     i = xs
@@ -445,9 +457,9 @@ def tangent(function, a, b, e, check):
     if(max_val == 0):    
         return xs
 
-    while math.fabs(xs - temp) >= math.sqrt((2*min_val*e)/max_val):  # перевірка критерію
+    while math.fabs(xs - temp) >= math.sqrt((2*min_val*e)/max_val):
         temp = xs
-        xs = xs - (f(xs)/fn(xs))  # формула для обчислення Xi+1
+        xs = xs - (f(xs)/fn(xs))
     
     return xs
 
