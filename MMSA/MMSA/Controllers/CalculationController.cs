@@ -23,7 +23,7 @@ namespace MMSA.Controllers
             var product = _calculationService.MakeCalculation(calculationInput);
             if (product == null)
             {
-                return NotFound();
+                return Ok(new CalculationResultDto { MU = new double[][]{ }, PlotXi = new double[] { }, PlotFXi = new double[][][] { }, Error = true  });
             }
             return Ok(product);
         }

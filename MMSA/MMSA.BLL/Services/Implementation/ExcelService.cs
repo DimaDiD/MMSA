@@ -47,7 +47,6 @@ namespace MMSA.BLL.Services.Implementation
 
                     var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
                     worksheetPart.Worksheet = new Worksheet(new SheetData());
-
                     var sheets = spreadsheetDocument.WorkbookPart.Workbook.AppendChild(new Sheets());
 
                     var sheet = new Sheet
@@ -63,7 +62,6 @@ namespace MMSA.BLL.Services.Implementation
                     for (var row = 0; row < tableResults.Count; row++)
                     {
                         var rowData = tableResults[row];
-
                         var rowElement = new Row();
 
                         for (var col = 0; col < rowData.Count; col++)
@@ -73,17 +71,13 @@ namespace MMSA.BLL.Services.Implementation
                                 DataType = CellValues.Number,
                                 CellValue = new CellValue(rowData[col])
                             };
-
                             rowElement.Append(cell);
                         }
-
                         sheetData.Append(rowElement);
                     }
                 }
-
                 excelBytes = memoryStream.ToArray();
             }
-
             return (Convert.ToBase64String(excelBytes));
         }
     }

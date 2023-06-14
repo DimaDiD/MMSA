@@ -29,7 +29,9 @@ namespace MMSA.BLL.Services.Implementation
         {
             try
             {
-                var vm = GetVm(calculationInput.InputFunction, calculationInput.OperatorValues, calculationInput.Operators, calculationInput.Scopes, calculationInput.LeftSide, calculationInput.RightSide);
+                var vm = GetVm(calculationInput.InputFunction, calculationInput.OperatorValues,
+                    calculationInput.Operators, calculationInput.Scopes,
+                    calculationInput.LeftSide, calculationInput.RightSide);
 
                 var cm = GetCm(vm, calculationInput.LeftSide, calculationInput.RightSide);
 
@@ -41,7 +43,7 @@ namespace MMSA.BLL.Services.Implementation
 
                 var plot = GetPlot(un, calculationInput.LeftSide, calculationInput.RightSide);
 
-                return new CalculationResultDto { MU = (double[][])concreteRoots, PlotXi = (double[])plot[0], PlotFXi = (double[][][])plot[1] };
+                return new CalculationResultDto { MU = (double[][])concreteRoots, PlotXi = (double[])plot[0], PlotFXi = (double[][][])plot[1], Error = false };
             }
             catch (Exception exception)
             {
@@ -142,7 +144,8 @@ while counter != 4:
 current_function = ''
 
 def f(x):
-    return float(eval(current_function, {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x, 'e':math.exp}))
+    return float(eval(current_function, 
+        {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x, 'e':math.exp}))
 
 x = sympy.Symbol('x')
 scalar_matrix = numpy.zeros((len(v_m) - 1, len(v_m) - 1))
@@ -270,8 +273,7 @@ def getZn(zm, zj):
     zjm = ''
     for i in range(zj):    
         zjm += '((' + str(cm[zm][i]) + str(')*(') + vm[zj-i] + '))'
-        if(i != zj-1):
-            zjm += '+'
+        if(i != zj-1): zjm += '+'
     return zjm     
 
 unh = []
@@ -281,8 +283,7 @@ for um in range(len(mu)):
         uij = ''
         for j in range(len(mu[um])):    
             uij += '(('+getZn(um, j+1)+')*('+str(mu[um][un])+'**'+str(j+1)+'))'
-            if(j != len(mu[um])-1):
-                uij += '+'            
+            if(j != len(mu[um])-1): uij += '+'            
         unm.append(uij)
     unh.append(unm)
 unh.reverse()
@@ -338,10 +339,12 @@ for uni in range(0, end):
     uniGraphs = []
     for ui in range(0, len(un[uni])):
         def norma_f(x):
-            return float(eval('('+str(un[uni][ui])+')**2', {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x, 'e':math.exp}))
+            return float(eval('('+str(un[uni][ui])+')**2', 
+                {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x, 'e':math.exp}))
 
         def f(x):
-            return float(eval(un[uni][ui], {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x, 'e':math.exp}))
+            return float(eval(un[uni][ui], 
+                {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x, 'e':math.exp}))
 
         norma, err = scipy.integrate.quad(norma_f, float(leftSide), float(rightSide)) 
         
@@ -396,41 +399,38 @@ parsedAllGraphs = System.Array[System.Array[System.Array[System.Double]]](allGra
                         scope.Set("cm", cm.ToPython());
                         scope.Set("mu", mu.ToPython());
                         scope.Exec(@"
-def tangent(function, a, b, e, check):
+def doNewton(function, a, b, e, check):
     add_func = ''
     for i in range(len(function)):
-        if function[i] == '^':
-            add_func += '**'
-        else:
-            add_func += function[i]
+        if function[i] == '^': add_func += '**'
+        else: add_func += function[i]
     function = add_func
 
-    def derivative(func): 
+    def derivative(func): # похідна функції
         x = sympy.Symbol('x')
-        y = eval(func, {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x})
+        y = eval(func, 
+            {'cos': math.cos, 'sin':math.sin, 'tan': math.tan, 'atan':math.atan, 'x': x})
         res = str(y.diff(x))
         return res
 
-    def f(x):
+    def f(x): # значення функції в точці
         return float(eval(function))
 
-    def fn(x):
+    def fn(x): # перша похідна
         return float(eval(derivative(function)))
 
-    def fnn(x):
+    def fnn(x): # друга похідна
         return float(eval(derivative(derivative(function))))
 
-    def direct(n):  # напрямок з якого відбуватиметься обрахунок
+    def direct(n):  # напрямок з якого відбуватиметься пошук v0
         try:
-            if f(n) > 0 and fnn(n) > 0:
-                return True
-            elif f(n) < 0 and fnn(n) < 0:
-                return True
+            if f(n) > 0 and fnn(n) > 0: return True
+            elif f(n) < 0 and fnn(n) < 0: return True
             return False
         except:
             return False
 
-    if direct(a):
+    if direct(a): # визначення напрямку
         xs = a
         silence = 1
         step = 0.01
@@ -441,25 +441,23 @@ def tangent(function, a, b, e, check):
         step = -0.01
         border = a
 
+    # пошук мінімального та максимального значення похідної на проміжку [a, b]
     min_val = math.fabs(fn(xs))
     max_val = math.fabs(fn(xs))
     i = xs
     while i*silence <= border*silence:
-        if math.fabs(fn(i)) < min_val:
-            min_val = math.fabs(fn(i))
-        elif math.fabs(fn(i)) > max_val:
-            max_val = math.fabs(fn(i))
+        if math.fabs(fn(i)) < min_val: min_val = math.fabs(fn(i))
+        elif math.fabs(fn(i)) > max_val: max_val = math.fabs(fn(i))
         i += step
 
     xs = (a+b)/2
     temp = b
     
-    if(max_val == 0):    
-        return xs
+    if(max_val == 0): return xs
 
     while math.fabs(xs - temp) >= math.sqrt((2*min_val*e)/max_val):
         temp = xs
-        xs = xs - (f(xs)/fn(xs))
+        xs = xs - (f(xs)/fn(xs)) # пошук Xi+1
     
     return xs
 
@@ -471,14 +469,12 @@ for i in range(0, len(cm)):
 
     polinom = ''
     for j in range(0, len(cm[i])):
-        if(j != len(cm[i]) - 1):
-            polinom = polinom + str(cm[i][j])+ '*x**'+ str(j)+'+'
-        else:
-            polinom = polinom + str(cm[i][j])+ '*x**'+ str(j)         
+        if(j != len(cm[i]) - 1): polinom = polinom + str(cm[i][j])+ '*x**'+ str(j)+'+'
+        else: polinom = polinom + str(cm[i][j])+ '*x**'+ str(j)         
 
     concreteRoots = []
     for item in mu[i]: 
-        concreteRoots.append(tangent(polinom, item-0.001, item+0.001, 0.0001, False))
+        concreteRoots.append(doNewton(polinom, item-0.001, item+0.001, 0.0001, False))
 
     result.append(concreteRoots)
 result.append([])
